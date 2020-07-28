@@ -1,0 +1,88 @@
+version: '3.7'
+services:
+  postgres:
+    image: postgres:11.0-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - 'postgres:/var/lib/postgresql/data'
+  redis:
+    image: redis:5.0-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - 'redis:/data'
+  test:
+    # depends_on:
+    #   - 'postgres'
+    #   - 'redis'
+    build:
+      context: .
+      dockerfile: Dockerfile.development
+      # args:
+      #   - BUNDLE_GEMFILE=/app/gemfiles/spree_4_1.gemfile
+    # command: bash -c "bundle exec rake test_app && bundle exec appraisal spree-4-1 bundle install && bundle exec appraisal spree-4-1 rake spec" 
+    command: bash -c "cd /app/spec/dummy && rm -rf tmp/pids/server.pid && bundle exec rails s -b 0.0.0.0 -p 3000"
+
+    tty: true
+    stdin_open: true
+    ports:
+      - "3000:3000"
+    volumes:
+      - 'bundle_cache:/bundle'
+      - '.:/app'
+      - .env:/app/.env
+      - 'dummy:/app/spec/dummy'
+      - 'sqlite-db:/app/spec/dummy/db'
+      - cache:/cache # Added to support Windows 10 Docker
+    environment:
+      # REDIS_URL: redis://redis:6379/0
+      # DB: postgres
+      # DB_HOST: postgres
+      # WEBPACKER_DEV_SERVER_HOST: webpacker
+      SPROCKETS_CACHE: /cache # Added to support Windows 10 Docker
+
+  webpacker:
+    build:
+      context: .
+      dockerfile: Dockerfile.development
+    environment:
+      - BUNDLE_GEMFILE=/app/Gemfile
+      - NODE_ENV=development
+      - RAILS_ENV=development
+      - WEBPACKER_DEV_SERVER_HOST=0.0.0.0
+    command: ./bin/webpack-dev-server
+    volumes:
+      - '.:/app'
+    ports:
+      - '3035:3035'
+  worker:
+    depends_on:
+      - 'postgres'
+      - 'redis'
+    build:
+      context: .
+      dockerfile: Dockerfile.development
+    command: bundle exec sidekiq -C config/sidekiq.yml
+    volumes:
+      - 'bundle_cache:/bundle'
+      - '.:/app'
+      - /app/tmp
+      - .env:/app/.env
+    environment:
+      - ENABLE_BOOTSNAP=false
+      - REDIS_URL=redis://redis:6379/0
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      
+
+volumes:
+  dummy:
+  sqlite-db:
+  redis:
+  postgres:
+  bundle_cache:
+  cache: # Added to support Windows 10 Docker
+
+
+
